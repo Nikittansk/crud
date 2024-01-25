@@ -3,11 +3,11 @@ package controllers
 import (
 	"context"
 	"encoding/json"
-	"fmt"
 	"log"
 	"net/http"
 
 	"github.com/Nikittansk/crud/model"
+	"github.com/Nikittansk/crud/server"
 	"github.com/julienschmidt/httprouter"
 	"go.mongodb.org/mongo-driver/bson"
 	"go.mongodb.org/mongo-driver/bson/primitive"
@@ -35,14 +35,18 @@ func (us *UserControllers) GetUsers(w http.ResponseWriter, r *http.Request, _ ht
 
 	cur, err := us.col().Find(us.ctx, bson.M{})
 	if err != nil {
-		w.WriteHeader(http.StatusNotFound)
+		server.JSONResponse(w, model.Response{
+			StatusCode: http.StatusNotFound,
+		})
 		return
 	}
 
 	for cur.Next(us.ctx) {
 		u := model.User{}
 		if err := cur.Decode(&u); err != nil {
-			w.WriteHeader(http.StatusNotFound)
+			server.JSONResponse(w, model.Response{
+				StatusCode: http.StatusNotFound,
+			})
 			return
 		}
 
@@ -51,52 +55,50 @@ func (us *UserControllers) GetUsers(w http.ResponseWriter, r *http.Request, _ ht
 
 	if err := cur.Err(); err != nil {
 		log.Fatal(err)
-		w.WriteHeader(http.StatusNotFound)
+		server.JSONResponse(w, model.Response{
+			StatusCode: http.StatusNotFound,
+		})
 		return
 	}
 
 	cur.Close(us.ctx)
 
 	if len(users) == 0 {
-		w.WriteHeader(http.StatusNotFound)
-		return	
-	}
-
-	uj, err := json.Marshal(users)
-	if err != nil{
-		w.WriteHeader(http.StatusNotFound)
+		server.JSONResponse(w, model.Response{
+			StatusCode: http.StatusNotFound,
+		})
 		return
 	}
 
-	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(http.StatusOK)
-	fmt.Fprintf(w, "%s\n", uj)
+	server.JSONResponse(w, model.Response{
+		StatusCode: http.StatusOK,
+		Data: users,
+	})
 }
 
 func (us *UserControllers) GetUserById(w http.ResponseWriter, r *http.Request, p httprouter.Params) {
 	objectId, err :=  primitive.ObjectIDFromHex(p.ByName("id"))
 
 	if err != nil{
-		w.WriteHeader(http.StatusNotFound)
+		server.JSONResponse(w, model.Response{
+			StatusCode: http.StatusNotFound,
+		})
 		return
 	}
 
 	u := model.User{}
 
 	if err := us.col().FindOne(us.ctx, bson.M{"_id": objectId}).Decode(&u); err != nil {
-		w.WriteHeader(http.StatusNotFound)
+		server.JSONResponse(w, model.Response{
+			StatusCode: http.StatusNotFound,
+		})
 		return
 	}
 
-	uj, err := json.Marshal(u)
-	if err != nil{
-		w.WriteHeader(http.StatusNotFound)
-		return
-	}
-
-	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(http.StatusOK)
-	fmt.Fprintf(w, "%s\n", uj)
+	server.JSONResponse(w, model.Response{
+		StatusCode: http.StatusOK,
+		Data: u,
+	})
 }
 
 func (us *UserControllers) CreateUser(w http.ResponseWriter, r *http.Request, _ httprouter.Params) {
@@ -107,65 +109,83 @@ func (us *UserControllers) CreateUser(w http.ResponseWriter, r *http.Request, _ 
 	u.Id = primitive.NewObjectID()
 
 	res, err := us.col().InsertOne(us.ctx, u)
-
-	uj, err := json.Marshal(res)
 	if err != nil{
-		w.WriteHeader(http.StatusNotFound)
+		server.JSONResponse(w, model.Response{
+			StatusCode: http.StatusNotFound,
+		})
 		return
 	}
 
-	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(http.StatusCreated)
-	fmt.Fprintf(w, "%s\n", uj)
+	server.JSONResponse(w, model.Response{
+		StatusCode: http.StatusOK,
+		Data: res,
+	})
 }
 
 func (us *UserControllers) UpdateUserById(w http.ResponseWriter, r *http.Request, p httprouter.Params) {
 	objectId, err :=  primitive.ObjectIDFromHex(p.ByName("id"))
 	if err != nil{
-		w.WriteHeader(http.StatusNotFound)
+		server.JSONResponse(w, model.Response{
+			StatusCode: http.StatusNotFound,
+		})
 		return
 	}
 	u := model.User{}
 
 	json.NewDecoder(r.Body).Decode(&u)
+	if u.Name == "" || u.Gender == "" || u.Age == 0 {
+		server.JSONResponse(w, model.Response{
+			StatusCode: http.StatusBadRequest,
+			Data: "Убедитесь, что все обязательные поля заполнены. Если запрос требует определенных параметров, удостоверьтесь, что они указаны и корректны.",
+		})
+		return
+	}
 
 	res, err := us.col().UpdateOne(us.ctx, bson.M{"_id": objectId}, bson.M{"$set": bson.M{
 		"name": u.Name,
 		"gender": u.Gender,
 		"age": u.Age,
 	}})
-
-	uj, err := json.Marshal(res)
 	if err != nil{
-		w.WriteHeader(http.StatusNotFound)
+		server.JSONResponse(w, model.Response{
+			StatusCode: http.StatusNotFound,
+		})
 		return
 	}
 
-	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(http.StatusOK)
-	fmt.Fprintf(w, "%s\n", uj)
+	server.JSONResponse(w, model.Response{
+		StatusCode: http.StatusOK,
+		Data: res,
+	})
 }
 
 func (us *UserControllers) DeleteUserById(w http.ResponseWriter, r *http.Request, p httprouter.Params) {
 	objectId, err :=  primitive.ObjectIDFromHex(p.ByName("id"))
 
 	if err != nil{
-		w.WriteHeader(http.StatusNotFound)
+		server.JSONResponse(w, model.Response{
+			StatusCode: http.StatusNotFound,
+		})
 		return
 	}
 
 	res, err := us.col().DeleteOne(us.ctx, bson.M{"_id": objectId})
 	if err != nil {
-		w.WriteHeader(http.StatusNotFound)
+		server.JSONResponse(w, model.Response{
+			StatusCode: http.StatusNotFound,
+		})
 		return
 	}
 
 	if res.DeletedCount == 0 {
-		w.WriteHeader(http.StatusNotFound)
-		fmt.Fprintln(w, "Документ с таким id не существует!")
+		server.JSONResponse(w, model.Response{
+			StatusCode: http.StatusNotFound,
+		})
 		return
 	}
 
-	w.WriteHeader(http.StatusOK)
-	fmt.Fprintf(w, "Документ с %s удален успешно!", objectId)
+	server.JSONResponse(w, model.Response{
+		StatusCode: http.StatusOK,
+		Data: "Запись была успешно удалена!",
+	})
 }

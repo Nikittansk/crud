@@ -8,7 +8,7 @@ import (
 
 	"github.com/Nikittansk/crud/controllers"
 	"github.com/Nikittansk/crud/db"
-	"github.com/julienschmidt/httprouter"
+	"github.com/Nikittansk/crud/router"
 )
 
 func main() {
@@ -23,13 +23,5 @@ func main() {
 	
 	userController := controllers.NewUserComtroller(mgoDB, context.TODO())
 	
-	router := httprouter.New()
-
-    router.GET("/users", userController.GetUsers)
-	router.GET("/users/:id", userController.GetUserById)
-	router.DELETE("/users/:id", userController.DeleteUserById)
-	router.POST("/user", userController.CreateUser)
-	router.PUT("/users/:id", userController.UpdateUserById)
-	
-	log.Fatal(http.ListenAndServe(":8080", router))
+	log.Fatal(http.ListenAndServe(":8080", router.Init(userController)))
 }
